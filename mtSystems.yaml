@@ -1,0 +1,14 @@
+- name: BOIB-cat-spa
+  ip: 84.88.58.132
+  port: 8001
+  source_suffix: ca
+  target_suffix: es
+  docx: ByChunks
+  
+- name: BOIB-spa-cat
+  ip: 84.88.58.132
+  port: 8002
+  source_suffix: es
+  target_suffix: ca
+  docx: ByChunks
+
