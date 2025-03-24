@@ -1,14 +1,28 @@
+- name: BOIB-cat-spaLOCAL
+  ip: 192.168.1.51
+  port: 8000
+  source_suffix: ca
+  target_suffix: es
+  strategy: chunks
+  
 - name: BOIB-cat-spa
   ip: 84.88.58.132
   port: 8001
   source_suffix: ca
   target_suffix: es
-  docx: ByChunks
+  strategy: chunks
   
 - name: BOIB-spa-cat
   ip: 84.88.58.132
   port: 8002
   source_suffix: es
   target_suffix: ca
-  docx: ByChunks
+  strategy: chunks
+  
+- name: UNPC-eng-spa
+  ip: 84.88.58.132
+  port: 8004
+  source_suffix: en
+  target_suffix: es
+  strategy: segments
 
