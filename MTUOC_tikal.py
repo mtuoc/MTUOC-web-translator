@@ -53,6 +53,7 @@ class Tikal():
         self.strategy=strategy
         
     def convert_to_moses(self, input_file):
+        #TODO: before conversion, make sure tags match between source and target
         try:
             command = [self.tikal_path, '-xm', input_file, '-2',  '-sl', self.sl, '-tl',  self.tl]
             if self.segment:
@@ -75,7 +76,7 @@ class Tikal():
             
     def generate_translation_moses(self, input_file):
         try:
-            command = [self.tikal_path, '-lm', input_file, '-sl', self.sl, '-tl',  self.tl, '-totrg']
+            command = [self.tikal_path, '-lm', input_file, '-sl', self.sl, '-tl',  self.tl, '-totrg','-trace']
             if self.segment:
                 extension=['-seg',self.srx_file]
                 command.extend(extension)
@@ -90,6 +91,7 @@ class Tikal():
             print(f"Error during conversion: {e}")
         except FileNotFoundError:
             print("Error: Tikal executable not found. Please check the Tikal path.")
+
     def get_tags(self, segment):
         tagsA = re.findall(r'</?.+?/?>', segment)
         tagsB = re.findall(r'\{[0-9]+\}', segment)
@@ -344,6 +346,10 @@ class Tikal():
         except:
             errormessage="Error retrieving translation from MTUOC: \n"+ str(sys.exc_info()[1])
             print("Error", errormessage, " in segment ", segment)
+            #Having an empty translation will cause target file generation to fail, so
+            #copy source in that case
+            translation = segment
+
         return(translation)
         
         

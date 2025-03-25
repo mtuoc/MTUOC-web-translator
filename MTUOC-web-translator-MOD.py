@@ -161,7 +161,7 @@ with odt:
     traductor.set_sl(source_suffix[mt_engine])
     traductor.set_tl(target_suffix[mt_engine])
     traductor.set_srx_file("segment.srx")
-    traductor.set_okf("okf_openxml")
+    traductor.set_okf("okf_openoffice")
     traductor.set_ip(ip)
     traductor.set_port(portMT)
     traductor.set_strategy(strategyT)
