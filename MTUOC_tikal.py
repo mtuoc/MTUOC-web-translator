@@ -7,6 +7,7 @@ import random
 import requests
 import re
 from collections import Counter
+import xml.etree.ElementTree as ET
 
 
 class Tikal():
@@ -88,7 +89,7 @@ class Tikal():
             subprocess.run(command, check=True)
             #print(f"Successfully converted {input_file} to {output_file}")
         except subprocess.CalledProcessError as e:
-            print(f"Error during conversion: {e}")
+                print(f"Error during conversion: {e}")
         except FileNotFoundError:
             print("Error: Tikal executable not found. Please check the Tikal path.")
 
@@ -295,32 +296,62 @@ class Tikal():
 
         return parts
     
+    # Check if segment consists only of tags (does not need to be translated)
+    def segment_is_empty_or_all_tags(self, segment):
+        return re.match(r'^\s*(<[^>]+>|{\d+})*\s*$', segment)
+
+    def is_valid_xml_line(self, line: str) -> bool:
+        """
+        Validates whether a given line is well-formed XML.
+        Since the line may not have enclosing tags, we wrap it in a temporary root.
+
+        :param line: The XML snippet to validate
+        :return: True if the line is well-formed XML, False otherwise
+        """
+        wrapped_line = f"<root>{line}</root>"
+        try:
+            ET.fromstring(wrapped_line)
+            return True
+        except ET.ParseError:
+            return False
+
     def translate_moses(self, input_file):
         mosesIN=input_file+"."+self.sl
         mosesOUT=input_file+"."+self.tl
         entrada=codecs.open(mosesIN,"r",encoding="utf-8")
         sortida=codecs.open(mosesOUT,"w",encoding="utf-8")
         for segment in entrada:
-            segment=segment.rstrip()
-            (segmentNormTags,equilTags)=self.replace_tags(segment)
-            (segmentNOSE,startTags,endTags)=self.remove_start_end_tag(segmentNormTags)
-            if self.strategy=="segments":
-                translation=self.translate_segment_MTUOC(segmentNOSE)+" "
-            elif self.strategy=="chunks":
-                translation=[]
-                chunks=self.get_tag_chunks(segmentNOSE)
-                for chunk in chunks:
-                    if self.is_tag(chunk):
-                        translation.append(chunk)
-                    else:
-                        translation_chunk=self.translate_segment_MTUOC(chunk)
-                        translation.append(translation_chunk)
-                translation=" ".join(translation)+" "
-              
-            translation=startTags+translation+endTags
-            for et in equilTags:
-                translation=translation.replace(et,equilTags[et],1)
-            translation=self.repairSpacesTags(segment,translation)
+            #TODO: make sure the tags in the translation make sense
+            if self.segment_is_empty_or_all_tags(segment):
+                translation = segment.rstrip()
+            else:    
+                segment=segment.rstrip()
+                (segmentNormTags,equilTags)=self.replace_tags(segment)
+                (segmentNOSE,startTags,endTags)=self.remove_start_end_tag(segmentNormTags)
+                if self.strategy=="segments":
+                    translation=self.translate_segment_MTUOC(segmentNOSE)+" "
+                elif self.strategy=="chunks":
+                    translation=[]
+                    chunks=self.get_tag_chunks(segmentNOSE)
+                    for chunk in chunks:
+                        if self.is_tag(chunk):
+                            translation.append(chunk)
+                        else:
+                            translation_chunk=self.translate_segment_MTUOC(chunk)
+                            translation.append(translation_chunk)
+                    translation=" ".join(translation)+" "
+                
+                translation=startTags+translation+endTags
+                for et in equilTags:
+                    translation=translation.replace(et,equilTags[et],1)
+                translation=self.repairSpacesTags(segment,translation)
+            # Validate tags in translation
+            # TODO: How does Okapi moses filter handle cases where there are no
+            # tags, does it still escape special characters etc.?
+            if not self.is_valid_xml_line(translation):
+                # If tags are invalid, strip them
+                translation = re.sub("<[^>]+>","",translation)
+
             sortida.write(translation+"\n")
             
     def translate(self, input_file):

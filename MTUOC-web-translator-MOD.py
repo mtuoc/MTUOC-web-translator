@@ -16,6 +16,7 @@ import ast
 
 from TextBox_translator import translate_segment_MTUOC
 from TextBox_translator import translate
+from MTUOC_cleanODT import OdtCleaner
 #from MTUOCtranslateDOCX import MTUOCtranslateDOCX
 from MTUOC_tikal import Tikal
 
@@ -95,23 +96,34 @@ with files:
     script_dir = Path(__file__).parent.resolve()
     temp_dir = tempfile.TemporaryDirectory(dir=script_dir)
     
-    uploaded_file = st.file_uploader(label="Upload a file", type=['doc', 'docx'], key="mt_engine_files_upload")
+    uploaded_file = st.file_uploader(label="Upload a file", type=['doc', 'docx', 'odt'],key="mt_engine_files_upload")
     
     if uploaded_file is not None:
         # Check if the uploaded file is new
+        # TODO: how about when you want to retranslate an updated file
+        # with the same name in the same session?
         if uploaded_file.name != st.session_state['uploaded_filename']:
             st.session_state['file_translated'] = False
             st.session_state['uploaded_filename'] = uploaded_file.name
-        
+
         totranslate = os.path.join(temp_dir.name, uploaded_file.name)
         with open(totranslate, "wb") as f:
             f.write(uploaded_file.getbuffer())
+
+        # Special handling for certain file types
+        uploaded_file_extension = os.path.splitext(uploaded_file.name)[1][1:]
+        # TODO: add error message for file with no extension, or unsupported extension
+        if uploaded_file_extension == "odt":
+            cleaned_odt = os.path.join(temp_dir.name, "cleaned_"+uploaded_file.name)
+            odt_cleaner = OdtCleaner()
+            odt_cleaner.clean_odt(totranslate,cleaned_odt)
+            totranslate = cleaned_odt
 
         # Only translate if the file has not been translated yet
         if not st.session_state['file_translated']:
             translate_file(traductor, totranslate, 'docx')
         
-        shutil.rmtree(temp_dir.name)
+        #shutil.rmtree(temp_dir.name)
 
 with docx:
     mt_engine = st.selectbox("Select MT Engine:", names, key="mt_engine_docx_select")
@@ -147,7 +159,7 @@ with docx:
         if not st.session_state['file_translated']:
             translate_file(traductor, totranslate, 'docx')
 
-        shutil.rmtree(temp_dir.name)
+        #shutil.rmtree(temp_dir.name)
 
 with odt:
     mt_engine = st.selectbox("Select MT Engine:", names, key="mt_engine_odt_select")
@@ -183,4 +195,4 @@ with odt:
         if not st.session_state['file_translated']:
             translate_file(traductor, totranslate, 'odt')
 
-        shutil.rmtree(temp_dir.name)
+        #shutil.rmtree(temp_dir.name)
