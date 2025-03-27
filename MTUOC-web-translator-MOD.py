@@ -121,7 +121,7 @@ with files:
 
         # Only translate if the file has not been translated yet
         if not st.session_state['file_translated']:
-            translate_file(traductor, totranslate, 'docx')
+            translate_file(traductor, totranslate, uploaded_file_extension)
         
         #shutil.rmtree(temp_dir.name)
 
