@@ -8,8 +8,8 @@
             "program": "MTUOC_cleanODT.py",
             "console": "integratedTerminal",
             "args": [
-                "test.odt",
-                "clean_test.odt"
+                "in.odt",
+                "clean_in.xml"
             ]
         },
         {
@@ -19,7 +19,9 @@
             "module": "streamlit",
             "args": [
                 "run",
-                "MTUOC-web-translator-MOD.py"
+                "MTUOC-web-translator-MOD.py",
+                "--server.headless",
+                "true"
             ]
         }
     ]

@@ -18,6 +18,88 @@ class OdtCleaner():
             "style:text-line-through-style"]
 
 
+    # This applies to spans with children but with no text in them. 
+    def join_visually_identical_adjacent_spans_with_children(self, inherited_visible_properties, parent : Element, level):
+        previous_span = None
+        previous_style = None
+        offset = 0
+        for span_index in range(0,len(parent.children)):
+            
+            span = parent.children[span_index-offset]
+            
+            if span.text or not span.children:
+                previous_span = None
+                previous_style = None
+                continue
+
+            new_inherited_visible_properties = dict(inherited_visible_properties)
+
+            # if this is not a text span, we still need to process its children, e.g.
+            # footnote tags have embedded text tags
+            try:
+                span_style_properties = self.document.get_style("text",span.style).get_properties()
+                # styles are returned as none if they have no properties, change them to empty dict
+                if span_style_properties is None:
+                    span_style_properties = dict()
+            except:
+                span_style_properties = None
+            
+
+            # fill out the missing visible properties in the span
+            if span_style_properties is not None and "style:font-name" in span_style_properties:
+                if span_style_properties["style:font-name"].rstrip('1234567890') == inherited_visible_properties["style:font-name"].rstrip('1234567890'):
+                    span_style_properties["style:font-name"] = inherited_visible_properties["style:font-name"]
+
+            for visible_prop in self.visible_props:
+                if span_style_properties is not None:
+                    if visible_prop in span_style_properties:
+                        if (span_style_properties[visible_prop] != inherited_visible_properties[visible_prop]):
+                            new_inherited_visible_properties[visible_prop] = span_style_properties[visible_prop]
+                    else:
+                        span_style_properties[visible_prop] = self.initial_visible_properties[visible_prop]
+
+            #recursively process child elements
+            if span.children:
+                # is this necessary here? the amount of children won't change when replacing
+                children_before = len(parent.children)
+                parent.replace_element(span,self.strip_visually_identical_spans(new_inherited_visible_properties,span,level+1))
+                children_now = len(parent.children)
+                offset += children_before-children_now
+
+            if previous_span:
+                visually_identical = True
+                for visible_prop in self.visible_props:
+                    if span_style_properties[visible_prop] != previous_style[visible_prop]:
+                        visually_identical = False
+                        previous_span = span
+                        previous_style = span_style_properties
+                        break
+                if visually_identical:            
+                    # join this span to the previous span
+                    previous_span = parent.children[span_index-1-offset]
+                    for child in span.children:
+                        previous_span.append(child)
+                    previous_style = span_style_properties
+
+                    # can't join next spans if there is a tail, as there is intervening text
+                    # between spans
+                    if span.tail:
+                        previous_span.tail = span.tail
+                        span.tail = ""
+                        previous_span = None
+                        previous_style = None
+
+                    parent.delete(span)
+                    offset += 1
+            elif not span.tail:
+                previous_span = span
+                previous_style = span_style_properties
+            else:
+                previous_span = None
+                previous_style = None
+        return parent 
+
+    # This applies to spans with text but no children. 
     def join_visually_identical_adjacent_spans(self, inherited_visible_properties, parent : Element):
         previous_style = None
         offset = 0
@@ -55,6 +137,8 @@ class OdtCleaner():
                 for visible_prop in self.visible_props:
                     if span_style_properties[visible_prop] != previous_style[visible_prop]:
                         visually_identical = False
+                        if not span.tail:
+                            previous_style = span_style_properties
                         break
                 if visually_identical:            
                     # join this span to the previous span
@@ -63,6 +147,7 @@ class OdtCleaner():
                     if span.tail:
                         previous_span.tail = span.tail
                         span.tail = ""
+                        previous_style = None
                     parent.delete(span)
                     offset += 1                
             else:
@@ -157,6 +242,9 @@ class OdtCleaner():
 
     def clean_odt(self, odt_file_name, cleaned_file_name):
         self.document = odfdo.Document(odt_file_name)
+        # if debugging (output is xml), save the original file as xml for comparison
+        if cleaned_file_name.endswith(".xml"):
+            self.document.save("original_" + odt_file_name, packaging="xml", pretty=True)
         body = self.document.body
         # Keep a state of the visible significant attributes whilst recursing each paragraph
         for para in body.paragraphs:
@@ -199,18 +287,23 @@ class OdtCleaner():
             new_para = self.strip_visually_identical_spans(self.initial_visible_properties,para,0)
 
             # Join adjacent spans with same formatting that are missed by the recursive stripping.
+            new_para = self.join_visually_identical_adjacent_spans_with_children(self.initial_visible_properties, new_para,0)
             new_para = self.join_visually_identical_adjacent_spans(self.initial_visible_properties, new_para)
 
             para.parent.replace_element(para,new_para)
         
-        #document.save("edited.xml", packaging="xml", pretty=True)
-        self.document.save(cleaned_file_name, pretty=True)
-
-        # Verify that the original and the cleaned documents still have the same contents
-        if OdtCleaner.compare_odt_files(odt_file_name, cleaned_file_name):
-            return True
-        else:
+        # make it possible to save in plain xml for easier debugging
+        if cleaned_file_name.endswith(".xml"):
+            self.document.save(cleaned_file_name, packaging="xml", pretty=True)
             return False
+        else:
+            self.document.save(cleaned_file_name, pretty=True)
+
+            # Verify that the original and the cleaned documents still have the same contents
+            if OdtCleaner.compare_odt_files(odt_file_name, cleaned_file_name):
+                return True
+            else:
+                return False
 
 def main():
     parser = argparse.ArgumentParser(description="Process an input file and save the output to another file.")
