@@ -1,0 +1,26 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "ODTCleaner",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "MTUOC_cleanODT.py",
+            "console": "integratedTerminal",
+            "args": [
+                "test.odt",
+                "clean_test.odt"
+            ]
+        },
+        {
+            "name": "Python: Streamlit",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "streamlit",
+            "args": [
+                "run",
+                "MTUOC-web-translator-MOD.py"
+            ]
+        }
+    ]
+}
