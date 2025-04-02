@@ -24,7 +24,7 @@ st.set_page_config(page_title="MTUOC web translator", page_icon=None, layout="wi
 
 st.image("MTUOC-logo.png", width=180)
 
-text, files, docx, odt = st.tabs(["Text box", "Files", "DOCX files", "ODT files"])
+text, files = st.tabs(["Text box", "Files"])
 
 with open("mtSystems.yaml") as stream:
     try:
@@ -116,83 +116,15 @@ with files:
         if uploaded_file_extension == "odt":
             cleaned_odt = os.path.join(temp_dir.name, "cleaned_"+uploaded_file.name)
             odt_cleaner = OdtCleaner()
-            odt_cleaner.clean_odt(totranslate,cleaned_odt)
-            totranslate = cleaned_odt
+
+            # Returns True if cleaned file has equal text compared to the original,
+            # so replace the original with cleaned
+            if odt_cleaner.clean_odt(totranslate,cleaned_odt):
+                os.remove(totranslate)
+                os.rename(cleaned_odt,totranslate)
 
         # Only translate if the file has not been translated yet
         if not st.session_state['file_translated']:
             translate_file(traductor, totranslate, uploaded_file_extension)
         
-        #shutil.rmtree(temp_dir.name)
-
-with docx:
-    mt_engine = st.selectbox("Select MT Engine:", names, key="mt_engine_docx_select")
-    ip = IP[mt_engine]
-    portMT = port[mt_engine]
-    target_suffixMT = target_suffix[mt_engine]
-    strategyT = strategy[mt_engine]
-
-    traductor = Tikal()
-    traductor.set_path("./okapi-linux/tikal.sh")
-    traductor.set_sl(source_suffix[mt_engine])
-    traductor.set_tl(target_suffix[mt_engine])
-    traductor.set_srx_file("segment.srx")
-    traductor.set_okf("okf_openxml")
-    traductor.set_ip(ip)
-    traductor.set_port(portMT)
-    traductor.set_strategy(strategyT)
-
-    script_dir = Path(__file__).parent.resolve()
-    temp_dir = tempfile.TemporaryDirectory(dir=script_dir)
-
-    uploaded_file = st.file_uploader(label="Upload a file", type=['doc', 'docx'], key="mt_engine_docx_upload")
-
-    if uploaded_file is not None:
-        if uploaded_file.name != st.session_state['uploaded_filename']:
-            st.session_state['file_translated'] = False
-            st.session_state['uploaded_filename'] = uploaded_file.name
-
-        totranslate = os.path.join(temp_dir.name, uploaded_file.name)
-        with open(totranslate, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-
-        if not st.session_state['file_translated']:
-            translate_file(traductor, totranslate, 'docx')
-
-        #shutil.rmtree(temp_dir.name)
-
-with odt:
-    mt_engine = st.selectbox("Select MT Engine:", names, key="mt_engine_odt_select")
-    ip = IP[mt_engine]
-    portMT = port[mt_engine]
-    target_suffixMT = target_suffix[mt_engine]
-    strategyT = strategy[mt_engine]
-
-    traductor = Tikal()
-    traductor.set_path("./okapi-linux/tikal.sh")
-    traductor.set_sl(source_suffix[mt_engine])
-    traductor.set_tl(target_suffix[mt_engine])
-    traductor.set_srx_file("segment.srx")
-    traductor.set_okf("okf_openoffice")
-    traductor.set_ip(ip)
-    traductor.set_port(portMT)
-    traductor.set_strategy(strategyT)
-
-    script_dir = Path(__file__).parent.resolve()
-    temp_dir = tempfile.TemporaryDirectory(dir=script_dir)
-
-    uploaded_file = st.file_uploader(label="Upload a file", type=['odt', 'odf'], key="mt_engine_odt_upload")
-
-    if uploaded_file is not None:
-        if uploaded_file.name != st.session_state['uploaded_filename']:
-            st.session_state['file_translated'] = False
-            st.session_state['uploaded_filename'] = uploaded_file.name
-
-        totranslate = os.path.join(temp_dir.name, uploaded_file.name)
-        with open(totranslate, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-
-        if not st.session_state['file_translated']:
-            translate_file(traductor, totranslate, 'odt')
-
-        #shutil.rmtree(temp_dir.name)
+        shutil.rmtree(temp_dir.name)

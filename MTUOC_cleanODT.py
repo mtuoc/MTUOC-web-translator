@@ -1,10 +1,56 @@
 import odfdo
 import difflib
 import re
+import os
 import argparse
 from odfdo import Element
 
 class OdtCleaner():
+    """
+    A class for merging visually identical spans in ODT documents.
+
+    Motivation: ODT documents accumulate spans when they are being worked,
+    which poses problems for localization. In localization,
+    visually significant spans (e.g. colors, bold, italic, footnote etc.)
+    need to be transferred into the translation in correct places, but the
+    presence of other, visually irrelevant spans complicates the process,
+    making correct placement of spans in the ttranslation almost impossible.
+    This is also a problem in computer-assisted translation, as human
+    translators find it impossible to place the spans correctly (tag soup).
+
+    Cause: The main reason for the accumulation of the spans are revision IDs.
+    New spans containing styles with revisions IDs (rsid) are generated
+    whenever the text of the document is modified. This may lead to tens
+    of different spans within a single sentence, where the only real
+    difference is the rsid attribute that is included in the automatically
+    generated style for that span.
+
+    Description of functionality: This cleaner class works by processing 
+    the spans in the document and merging spans that are visually identical, 
+    which is defined as not differing in the attributes listed in 
+    self.visible_props. Note that the list may not contain some visually
+    significant attributes.
+    
+    There are three separate merging steps in the process:
+    
+        1. strip_visually_identical_child_spans: This removes spans that are 
+        visually identical to their parent, which may be a paragraph or a 
+        text span.
+        2. join_visually_identical_adjacent_spans_with_children: This merges
+        visually identical adjacent spans, which have children, collecting
+        the children from all spans under a single span.
+        3. join_visually_identical_adjacent_spans: This merges visually
+        identical adjacent spans without children.
+
+    The steps need to be performed in this order, as later steps depend on
+    structure imposed by the preceding steps. There may be corner cases
+    where some superfluous spans remain. 
+
+    To guard against unintended text removal, the class contains a static
+    vefification method compare_odt_files, which checks that the original
+    and cleaned file have identical text content.
+    """  
+
     def __init__(self):
         self.visible_props = [
             "style:font-name",
@@ -27,6 +73,7 @@ class OdtCleaner():
             
             span = parent.children[span_index-offset]
             
+            # skip tags with text, as it complicates things too much (TODO?)
             if span.text or not span.children:
                 previous_span = None
                 previous_style = None
@@ -38,7 +85,8 @@ class OdtCleaner():
             # footnote tags have embedded text tags
             try:
                 span_style_properties = self.document.get_style("text",span.style).get_properties()
-                # styles are returned as none if they have no properties, change them to empty dict
+                # text styles are returned as none if they have no properties, change them to empty dict
+                # so that they are processed correctly
                 if span_style_properties is None:
                     span_style_properties = dict()
             except:
@@ -60,9 +108,9 @@ class OdtCleaner():
 
             #recursively process child elements
             if span.children:
-                # is this necessary here? the amount of children won't change when replacing
+                # is offset necessary here? the amount of children won't change when replacing
                 children_before = len(parent.children)
-                parent.replace_element(span,self.strip_visually_identical_spans(new_inherited_visible_properties,span,level+1))
+                parent.replace_element(span,self.join_visually_identical_adjacent_spans_with_children(new_inherited_visible_properties,span,level+1))
                 children_now = len(parent.children)
                 offset += children_before-children_now
 
@@ -71,11 +119,11 @@ class OdtCleaner():
                 for visible_prop in self.visible_props:
                     if span_style_properties[visible_prop] != previous_style[visible_prop]:
                         visually_identical = False
-                        previous_span = span
-                        previous_style = span_style_properties
                         break
+
                 if visually_identical:            
                     # join this span to the previous span
+                    # this seems unnecessary, since previous_span is already specified?
                     previous_span = parent.children[span_index-1-offset]
                     for child in span.children:
                         previous_span.append(child)
@@ -91,6 +139,13 @@ class OdtCleaner():
 
                     parent.delete(span)
                     offset += 1
+                else:
+                    if not span.tail:
+                        previous_span = span
+                        previous_style = span_style_properties
+                    else:
+                        previous_span = None
+                        previous_style = None
             elif not span.tail:
                 previous_span = span
                 previous_style = span_style_properties
@@ -130,7 +185,7 @@ class OdtCleaner():
             if span.children:
                 parent.replace_element(span,self.join_visually_identical_adjacent_spans(new_inherited_visible_properties, span))
             
-            #Check if span visually identical to previous span
+            # Check if span visually identical to previous span
             # don't try to join elements with children, too many unclear implications there
             if previous_style and not span.children:
                 visually_identical = True
@@ -151,17 +206,18 @@ class OdtCleaner():
                     parent.delete(span)
                     offset += 1                
             else:
-                # If the span has a tail, do not try to merge it, as the next tag is not adjacent
-                if not span.tail:
-                    previous_style = span_style_properties
-                else:
+                # If the span has a tail, do not try to merge it, as the next tag is not adjacent.
+                # Don't try to merge spans with children, as the text merging becomes too complex
+                if span.tail or span.children:
                     previous_style = None
+                else:
+                    previous_style = span_style_properties
 
         return parent
 
 
     # First remove all spans that are visually identical to their parent. Do this recursively, as text spans may be nested
-    def strip_visually_identical_spans(self, inherited_visible_properties,parent,level):
+    def strip_visually_identical_child_spans(self, inherited_visible_properties,parent,level):
 
         # The amount of children may decrease or increase during the loop, so keep an offset
         offset = 0
@@ -197,7 +253,7 @@ class OdtCleaner():
             if span.children:
                 # is this necessary here? the amount of children won't change when replacing
                 children_before = len(parent.children)
-                parent.replace_element(span,self.strip_visually_identical_spans(new_inherited_visible_properties,span,level+1))
+                parent.replace_element(span,self.strip_visually_identical_child_spans(new_inherited_visible_properties,span,level+1))
                 children_now = len(parent.children)
                 offset += children_before-children_now
                 
@@ -240,11 +296,12 @@ class OdtCleaner():
 
         return ws_normalized_text1 == ws_normalized_text2
 
-    def clean_odt(self, odt_file_name, cleaned_file_name):
+    def clean_odt(self, odt_file_name, cleaned_file_name, debug=False):
         self.document = odfdo.Document(odt_file_name)
-        # if debugging (output is xml), save the original file as xml for comparison
-        if cleaned_file_name.endswith(".xml"):
+        # if debugging, save the original file as xml for comparison
+        if debug:
             self.document.save("original_" + odt_file_name, packaging="xml", pretty=True)
+            os.rename("original_" + odt_file_name + ".xml", "original_" + odt_file_name.replace(".odt",".fodt"))
         body = self.document.body
         # Keep a state of the visible significant attributes whilst recursing each paragraph
         for para in body.paragraphs:
@@ -280,11 +337,20 @@ class OdtCleaner():
                 self.initial_visible_properties["fo:font-weight"] = "normal"
             if "fo:font-style" not in self.initial_visible_properties:
                 self.initial_visible_properties["fo:font-style"] = "normal"
+            
+            # TODO: background-color is a bit strange, since it occasionally gets included
+            # in the styles even when the same as default color, but does not appear higher up 
+            # the document tree. The lines below are an attempt to fix this by setting white as
+            # default, but for some reason the fix causes more problems than it solves. Work on
+            # this if it becomes an actual problem.  
+            #if "fo:background-color" not in self.initial_visible_properties or \
+            #    self.initial_visible_properties["fo:background-color"] == "transparent":
+            #    self.initial_visible_properties["fo:background-color"] = "#ffffff"
             for visible_prop in self.visible_props:
                 if visible_prop not in self.initial_visible_properties:
                     self.initial_visible_properties[visible_prop] = "none"
             
-            new_para = self.strip_visually_identical_spans(self.initial_visible_properties,para,0)
+            new_para = self.strip_visually_identical_child_spans(self.initial_visible_properties,para,0)
 
             # Join adjacent spans with same formatting that are missed by the recursive stripping.
             new_para = self.join_visually_identical_adjacent_spans_with_children(self.initial_visible_properties, new_para,0)
@@ -293,27 +359,29 @@ class OdtCleaner():
             para.parent.replace_element(para,new_para)
         
         # make it possible to save in plain xml for easier debugging
-        if cleaned_file_name.endswith(".xml"):
+        if debug:
             self.document.save(cleaned_file_name, packaging="xml", pretty=True)
-            return False
-        else:
-            self.document.save(cleaned_file_name, pretty=True)
+            os.rename(cleaned_file_name + ".xml", cleaned_file_name.replace(".odt",".fodt"))
+        
+        self.document.save(cleaned_file_name, pretty=True)
 
-            # Verify that the original and the cleaned documents still have the same contents
-            if OdtCleaner.compare_odt_files(odt_file_name, cleaned_file_name):
-                return True
-            else:
-                return False
+        # Verify that the original and the cleaned documents still have the same contents
+        if OdtCleaner.compare_odt_files(odt_file_name, cleaned_file_name):
+            return True
+        else:
+            return False
 
 def main():
     parser = argparse.ArgumentParser(description="Process an input file and save the output to another file.")
     parser.add_argument("input_file", help="Path to the input file")
     parser.add_argument("output_file", help="Path to the output file")
+    parser.add_argument("--debug", action="store_true", help="Path to the output file")
     
     args = parser.parse_args()
 
     cleaner = OdtCleaner()
-    cleaner.clean_odt(args.input_file, args.output_file)
+    print(cleaner.clean_odt(args.input_file, args.output_file, args.debug))
+
 
 if __name__ == "__main__":
     main()
