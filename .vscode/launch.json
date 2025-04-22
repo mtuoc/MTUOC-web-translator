@@ -13,6 +13,18 @@
             ]
         },
         {
+            "name": "DOCXCleaner",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "MTUOC_cleanDOCX.py",
+            "console": "integratedTerminal",
+            "args": [
+                "in_formatted.docx",
+                "out.docx",
+                "--unzip"
+            ]
+        },
+        {
             "name": "Python: Streamlit",
             "type": "debugpy",
             "request": "launch",
