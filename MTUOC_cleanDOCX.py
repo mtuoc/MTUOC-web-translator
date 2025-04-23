@@ -2,6 +2,8 @@ import argparse
 import os
 import shutil
 import zipfile
+import re
+import difflib
 from docx import Document
 from docx.oxml.text.paragraph import CT_P
 from docx.oxml.table import CT_Tbl
@@ -49,6 +51,8 @@ from docx.shared import RGBColor
 
 """
 
+#TODO: test footnotes, super/subscripts etc.
+
 class DocxCleaner():
 
     def __init__(self):
@@ -69,9 +73,11 @@ class DocxCleaner():
             # formatting. Because of that, check the run._r.style (can be None) instead of .style.
             # For the paragraphs, if there is no style, .style also returns default paragraph style.
             # That is not a problem, though, since there is no style that would override it.
+
+            # TODO: handling of rPr elements in rPr elements, those do not seem to be available
+            # through the python-docx API. Are those properties actually used?
             sources = [
                 run.font,
-                paragraph.font,
                 run.style.font if run._r.style else None,
                 *(self.get_style_chain(paragraph.style) if paragraph.style else [])
             ]
@@ -149,6 +155,7 @@ class DocxCleaner():
                 elif hasattr(font, prop):
                     setattr(font, prop, value)
 
+
     def iter_paragraphs_in_element(self, element):
         """Yields all paragraphs in an element (including nested tables)."""
         for child in element._element.iter():
@@ -160,7 +167,7 @@ class DocxCleaner():
                     for cell in row.cells:
                         yield from self.iter_paragraphs_in_element(cell)
 
-    def clean_document(self, input_path, output_path):
+    def clean_docx(self, input_path, output_path):
         """Processes all paragraphs in a document."""
         doc = Document(input_path)
 
@@ -176,6 +183,41 @@ class DocxCleaner():
 
         doc.save(output_path)
 
+    # This is used to validate that the conversion did not add or delete text
+    # The final test is whether the texts are identical, when normalized by removing all
+    # whitespace, other tests are there for debugging
+    def compare_odt_files(self, file1, file2):
+        """Compares the text content of two ODT files."""
+        def extract_text(path):
+            """Extracts plain text from an ODT file."""
+            doc = Document(path)
+            text = ""
+            for para in self.iter_paragraphs_in_element(doc):
+                text += para.text
+            # Process headers and footers
+            for section in doc.sections:
+                for header_footer in (section.header, section.footer):
+                    for para in self.iter_paragraphs_in_element(header_footer):
+                        text += para.text
+            return text
+
+        text1 = extract_text(file1)
+        text2 = extract_text(file2)
+        
+        ws_normalized_text1 = re.sub("\s+","",text1)
+        ws_normalized_text2 = re.sub("\s+","",text2)
+
+        
+        if ws_normalized_text1 == ws_normalized_text2:
+            print("After tag cleaning, the docs have same content without whitespaces")
+        else:
+            print("After tag cleaning, docs are different in addition to whitespace differences")
+            diff = difflib.unified_diff(text1.split("\n"), text2.split("\n"), fromfile=file1, tofile=file2, lineterm='')
+            diff_string = "\n".join(diff)
+            print(diff_string)
+
+        return ws_normalized_text1 == ws_normalized_text2
+
 def main():
     parser = argparse.ArgumentParser(
         description="Merge adjacent runs with identical formatting in DOCX files."
@@ -190,7 +232,7 @@ def main():
     args = parser.parse_args()
 
     docx_cleaner = DocxCleaner()
-    docx_cleaner.clean_document(args.input, args.output)
+    docx_cleaner.clean_docx(args.input, args.output)
     print(f"Cleaned document saved to: {args.output}")
 
     if args.unzip:
@@ -201,6 +243,8 @@ def main():
         with zipfile.ZipFile(args.output, 'r') as zip_ref:
             zip_ref.extractall(unzip_dir)
         print(f"Unzipped output to: {unzip_dir}")
+
+    docx_cleaner.compare_odt_files(args.input, args.output)
 
 if __name__ == "__main__":
     main()

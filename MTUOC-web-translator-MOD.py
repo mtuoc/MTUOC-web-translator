@@ -17,6 +17,7 @@ import ast
 from TextBox_translator import translate_segment_MTUOC
 from TextBox_translator import translate
 from MTUOC_cleanODT import OdtCleaner
+from MTUOC_cleanDOCX import DocxCleaner
 #from MTUOCtranslateDOCX import MTUOCtranslateDOCX
 from MTUOC_tikal import Tikal
 
@@ -122,6 +123,16 @@ with files:
             if odt_cleaner.clean_odt(totranslate,cleaned_odt):
                 os.remove(totranslate)
                 os.rename(cleaned_odt,totranslate)
+
+        if uploaded_file_extension == "docx":
+            cleaned_docx = os.path.join(temp_dir.name, "cleaned_"+uploaded_file.name)
+            docx_cleaner = DocxCleaner()
+
+            # Returns True if cleaned file has equal text compared to the original,
+            # so replace the original with cleaned
+            if docx_cleaner.clean_docx(totranslate,cleaned_docx):
+                os.remove(totranslate)
+                os.rename(cleaned_docx,totranslate)
 
         # Only translate if the file has not been translated yet
         if not st.session_state['file_translated']:
