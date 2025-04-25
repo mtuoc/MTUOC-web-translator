@@ -13,14 +13,21 @@
             ]
         },
         {
+            "name": "Debug script",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "DOCXCleaner",
             "type": "debugpy",
             "request": "launch",
             "program": "MTUOC_cleanDOCX.py",
             "console": "integratedTerminal",
             "args": [
-                "in_formatted.docx",
-                "out.docx",
+                "testing/in_formatted.docx",
+                "testing/out.docx",
                 "--unzip"
             ]
         },
