@@ -30,6 +30,7 @@ import net.sf.okapi.common.uidescription.TextInputPart;
 public class Parameters extends StringParameters implements IEditorDescriptionProvider {
 
 	private static final String URL = "url";
+	private static final String CONTEXT = "context";
 
 	public Parameters() {
 	}
@@ -42,10 +43,19 @@ public class Parameters extends StringParameters implements IEditorDescriptionPr
 		setString(URL, url);
 	}
 
+	public String getContext () {
+		return getString(CONTEXT);
+	}
+
+	public void setContext(String context) {
+		setString(CONTEXT, context);
+	}
+
 	@Override
 	public void reset () {
 		super.reset();
         setUrl("");
+		setContext("");
 	}
 
 	@Override
@@ -54,6 +64,9 @@ public class Parameters extends StringParameters implements IEditorDescriptionPr
 		desc.add(URL,
 			"URL for MTUOC Engine",
 			"The MTUOC Engine's API URL - format http://<servername>:<port>");
+		desc.add(CONTEXT,
+			"Context for the MTUOC Engine calls",
+			"Optional context description for the MTUOC engine calls");
 		return desc;
 	}
 
@@ -61,8 +74,8 @@ public class Parameters extends StringParameters implements IEditorDescriptionPr
 	public EditorDescription createEditorDescription (ParametersDescription paramsDesc) {
 		EditorDescription desc = new EditorDescription("MTUOC Engine Connector Settings", true, false);
 		desc.addTextInputPart(paramsDesc.get(URL));
-		//TextInputPart tip = desc.addTextInputPart(paramsDesc.get(CONTEXT));
-		//tip.setAllowEmpty(true);
+		TextInputPart tip = desc.addTextInputPart(paramsDesc.get(CONTEXT));
+		tip.setAllowEmpty(true);
 		return desc;
 	}
 
