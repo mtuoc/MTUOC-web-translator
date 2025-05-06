@@ -146,8 +146,12 @@ public class MTUOCConnector extends BaseConnector {
             result = new QueryResult();
             result.weight = getWeight();
             result.source = fragment;
-            result.target = new TextFragment(translation);
-
+            if (fragment.hasCode()) {
+                result.target = new TextFragment(util.fromCodedHTML(translation, fragment, true),
+                        fragment.getClonedCodes());
+            } else {
+                result.target = new TextFragment(util.fromCodedHTML(translation, fragment, true));
+            }
             result.setFuzzyScore(95);
             result.origin = getName();
             result.matchType = MatchType.MT;
