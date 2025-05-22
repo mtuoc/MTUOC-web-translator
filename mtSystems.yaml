@@ -1,0 +1,15 @@
+- name: spa-cat
+  ip: 84.88.58.132
+  port: 8005
+  server_type: MTUOC
+  source_suffix: es
+  target_suffix: ast
+  
+- name: TAN-IBE-ast-spa
+  ip: 84.88.58.132
+  port: 8006
+  server_type: MTUOC
+  source_suffix: ast
+  target_suffix: es
+  
+
